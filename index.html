@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ELNUSA AI — Alarm Receiver</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Manrope:wght@400;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="receiver-container">
+    <!-- Header -->
+    <div class="receiver-header">
+      <div class="brand-row">
+        <span class="receiver-logo">🦺</span>
+        <div>
+          <h1 class="receiver-title">ELNUSA PETROFIN</h1>
+          <p class="receiver-subtitle">AI ALARM RECEIVER</p>
+        </div>
+      </div>
+      <div class="connection-status" id="conn-status">
+        <span class="status-dot disconnected"></span>
+        <span>DISCONNECTED</span>
+      </div>
+    </div>
+
+    <!-- VPS URL Config -->
+    <div class="config-panel">
+      <label class="config-label">VPS Server URL</label>
+      <div class="config-row">
+        <input type="text" id="vps-url" class="config-input" value="http://212.85.25.51:4000" placeholder="http://IP:PORT" />
+        <button class="connect-btn" id="connect-btn" onclick="toggleConnection()">CONNECT</button>
+      </div>
+    </div>
+
+    <!-- Alert Flash Overlay (hidden by default) -->
+    <div class="alert-flash" id="alert-flash">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-text" id="alert-text">PELANGGARAN TERDETEKSI</div>
+      <div class="alert-detail" id="alert-detail">CELL PHONE — CAM 01 — 14:30:25</div>
+    </div>
+
+    <!-- Log -->
+    <div class="log-panel">
+      <h3 class="log-title">📋 LOG PELANGGARAN</h3>
+      <div class="log-container" id="log-container">
+        <div class="log-empty">Belum ada pelanggaran terdeteksi</div>
+      </div>
+    </div>
+
+    <!-- Audio untuk interkom -->
+    <audio id="intercom-audio" autoplay></audio>
+
+    <!-- Info -->
+    <div class="receiver-footer">
+      <p>Buka halaman ini di laptop yang terhubung ke speaker/TV di lokasi CCTV</p>
+      <p>Alarm akan berbunyi otomatis saat pelanggaran terdeteksi</p>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
