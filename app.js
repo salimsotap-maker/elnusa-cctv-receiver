@@ -57,32 +57,69 @@ function createAlarmSound() {
   return { play: playAlarm, stop: stopAlarm };
 }
 
-// ── AUDIO INTERCOM RECEIVER ──────────────────────────────────────────────────
-let audioCtx = null;
-let audioQueue = Promise.resolve();
+// ── AUDIO INTERCOM RECEIVER (WebRTC Callee) ─────────────────────────────────
+let rtcRecv = null;
 
-function playAudioChunk(base64Data) {
-  // Decode base64 → ArrayBuffer → decode audio → play
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const binary = atob(base64Data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const buffer = bytes.buffer;
-    // Queue agar tidak overlap
-    audioQueue = audioQueue.then(() =>
-      audioCtx.decodeAudioData(buffer.slice(0)).then(decoded => {
-        const src = audioCtx.createBufferSource();
-        src.buffer = decoded;
-        src.connect(audioCtx.destination);
-        src.start(0);
-        return new Promise(r => src.onended = r);
-      }).catch(() => {})
-    );
-  } catch(e) {
-    console.warn('[AUDIO]', e);
-  }
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
+
+async function handleRTCOffer(offer) {
+  const vpsUrl = document.getElementById('vps-url').value.trim();
+  const isVercel = location.protocol === 'https:' && location.hostname.includes('vercel.app');
+  const base = isVercel ? '' : vpsUrl;
+
+  // Tutup koneksi lama jika ada
+  if (rtcRecv) { rtcRecv.close(); rtcRecv = null; }
+
+  rtcRecv = new RTCPeerConnection(RTC_CONFIG);
+
+  // Putar audio masuk dari dashboard ke <audio>
+  rtcRecv.ontrack = (e) => {
+    const audio = document.getElementById('intercom-audio');
+    if (audio) {
+      audio.srcObject = e.streams[0];
+      audio.play().catch(() => {});
+    }
+    addLog('system', '🎙️ Interkom aktif — suara dari dashboard masuk');
+  };
+
+  rtcRecv.onconnectionstatechange = () => {
+    const s = rtcRecv?.connectionState;
+    if (s === 'connected')   addLog('system', '✅ Interkom terhubung');
+    if (s === 'disconnected') addLog('system', '⚠️ Interkom terputus');
+  };
+
+  // Kirim ICE candidate ke VPS
+  rtcRecv.onicecandidate = async (e) => {
+    if (!e.candidate) return;
+    try {
+      await fetch(`${base}/api/rtc/ice/recv`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(e.candidate.toJSON())
+      });
+    } catch(_) {}
+  };
+
+  // Set remote description (offer dari dashboard)
+  await rtcRecv.setRemoteDescription(new RTCSessionDescription(offer));
+
+  // Buat answer
+  const answer = await rtcRecv.createAnswer();
+  await rtcRecv.setLocalDescription(answer);
+
+  // Kirim answer ke VPS
+  await fetch(`${base}/api/rtc/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: answer.type, sdp: answer.sdp })
+  });
 }
+
 
 // ── SSE CONNECTION ───────────────────────────────────────────────────────────
 function toggleConnection() {
@@ -139,8 +176,17 @@ function connect() {
           addLog('system', 'Buzzer dimatikan oleh admin dashboard');
         }
 
-        if (data.type === 'audio_chunk') {
-          playAudioChunk(data.data);
+        // WebRTC: terima offer dari dashboard
+        if (data.type === 'rtc_offer' && data.offer) {
+          handleRTCOffer(data.offer).catch(e => {
+            console.error('[RTC Receiver]', e);
+            addLog('system', '❌ Gagal terima interkom: ' + e.message);
+          });
+        }
+
+        // WebRTC: terima ICE candidate dari dashboard
+        if (data.type === 'rtc_ice_dash' && data.candidate && rtcRecv) {
+          rtcRecv.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
         }
       } catch (e) {
         console.error('[SSE] Parse error:', e);
